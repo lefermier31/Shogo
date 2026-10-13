@@ -22,6 +22,7 @@ typedef struct {
     int diagnose_only;    /* measure only, change nothing in the game's behaviour */
     int strict;           /* abort on any doubtful detection */
     int log_enabled;
+    char log_dir[MAX_PATH]; /* empty = next to the DLL */
     int stats_interval;   /* seconds between stats lines */
     int valve_ms;         /* always let the server update after this much real time */
 } config_t;

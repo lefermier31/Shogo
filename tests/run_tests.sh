@@ -125,6 +125,13 @@ check no_focus_anchor "$FAST and r['errors'] == 0 and \"anchor 'alwaysfocused' m
 run two_callers twocallers/client.exe - -- --frames 1500 --frame-ms 4
 check two_callers "$FAST and r['errors'] == 0 and 'candidate update functions' in log"
 
+LOGDIR_UNIX="$WORK/logs on D/shogo"
+LOGDIR_WIN="$(winepath -w "$LOGDIR_UNIX" 2>/dev/null)"
+run log_dir std/client.exe "LogDir=${LOGDIR_WIN//\\/\\\\}" -- --frames 600 --frame-ms 4  # run() expands \\ escapes
+cp "$LOGDIR_UNIX/ShogoFPS.log" "$WORK/log_dir.log" 2>/dev/null
+check log_dir "r['ratio'] < 1.03 and 'server tick fix ON' in log and os.path.exists(r'$LOGDIR_UNIX/ShogoFPS.log')"
+rm -rf "$WORK/logs on D"
+
 run other_process std/other.exe - -- --frames 600 --frame-ms 4
 check other_process "$FAST and log == ''"
 

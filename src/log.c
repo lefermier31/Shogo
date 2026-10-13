@@ -46,7 +46,26 @@ void log_open(HMODULE self)
     n = GetModuleFileNameA(self, path, MAX_PATH);
     if (n == 0 || n >= MAX_PATH - 16)
         return;
-    if (needs_relocation(path)) {
+    if (g_cfg.log_dir[0]) {
+        /* Chosen folder (e.g. on another drive): create it, parents included. */
+        char *p;
+        n = (DWORD)lstrlenA(g_cfg.log_dir);
+        if (n == 0 || n >= MAX_PATH - 16)
+            return;
+        lstrcpyA(path, g_cfg.log_dir);
+        while (n > 3 && (path[n - 1] == '\\' || path[n - 1] == '/'))
+            path[--n] = 0;
+        for (p = path + (n > 3 ? 3 : n); *p; p++) {
+            if (*p == '\\' || *p == '/') {
+                char c = *p;
+                *p = 0;
+                CreateDirectoryA(path, NULL);
+                *p = c;
+            }
+        }
+        CreateDirectoryA(path, NULL);
+        lstrcatA(path, "\\ShogoFPS.log");
+    } else if (needs_relocation(path)) {
         n = GetEnvironmentVariableA("LOCALAPPDATA", path, MAX_PATH - 32);
         if (n == 0 || n >= MAX_PATH - 32)
             return;

@@ -22,6 +22,7 @@ static void load_config(HMODULE self)
     g_cfg.log_enabled = 1;
     g_cfg.stats_interval = 30;
     g_cfg.valve_ms = 100;
+    g_cfg.log_dir[0] = 0;
     if (!slash)
         return;
     strcpy(slash + 1, "ShogoFPS.ini");
@@ -38,6 +39,7 @@ static void load_config(HMODULE self)
     GETI("StatsInterval", stats_interval);
     GETI("ValveMs", valve_ms);
 #undef GETI
+    GetPrivateProfileStringA("ShogoFPS", "LogDir", "", g_cfg.log_dir, sizeof g_cfg.log_dir, path);
     if (g_cfg.stats_interval < 5)
         g_cfg.stats_interval = 5;
     if (g_cfg.valve_ms < 50)
