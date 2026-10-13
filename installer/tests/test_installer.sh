@@ -46,7 +46,7 @@ cp "$GAME/autoexec.cfg" "$WORK/autoexec.orig"
 # --- install ---
 run
 check "install exit code 0" '[ "$(cat $WORK/rc)" = 0 ]'
-grep -q "Installation terminée" "$WORK/out.txt" || { cat "$WORK/out.txt"; }
+grep -q "Installation complete" "$WORK/out.txt" || { cat "$WORK/out.txt"; }
 check "dinput.dll = dinputto8" '[ "$(sha "$GAME/dinput.dll")" = f96bb1101e23a6477043a3859cbf875a990eaa62ee6849f87e967b3dd963f781 ]'
 check "DDraw.dll = dgVoodoo x86" '[ "$(sha "$GAME/DDraw.dll")" = 612a24408a090a3c6f3886557fa18034ee742e94ad0a40ebdf854d2816176c2e ]'
 check "D3DImm.dll = dgVoodoo x86" '[ "$(sha "$GAME/D3DImm.dll")" = 93c534f2d17419ea78f15551f7e0aac78b3c503733a840914fa063708a5afe8e ]'
@@ -76,7 +76,7 @@ check "original dinput.dll backed up" '[ "$(cat "$GAME/ShogoMods_Backup/original
 cp "$C" "$WORK/conf1"; cp "$A" "$WORK/auto1"
 run
 check "rerun exit code 0" '[ "$(cat $WORK/rc)" = 0 ]'
-check "rerun reports components in place" '[ "$(grep -c "déjà en place" "$WORK/out.txt")" -ge 4 ]'
+check "rerun reports components in place" '[ "$(grep -c "already in place" "$WORK/out.txt")" -ge 4 ]'
 check "rerun keeps config stable" 'cmp -s "$C" "$WORK/conf1" && cmp -s "$A" "$WORK/auto1"'
 check "rerun keeps first backup" '[ "$(cat "$GAME/ShogoMods_Backup/originals/dinput.dll")" = "original dinput" ]'
 
@@ -96,7 +96,7 @@ check "game files untouched" '[ "$(cat "$GAME/Client.exe")" = "MZ fake client" ]
 mv "$GAME" "$WORK/hidden"
 (cd "$WORK" && POWERSHELL_TELEMETRY_OPTOUT=1 "$PWSH" -NoProfile -NonInteractive -File "$INST/Install-ShogoMods.ps1" \
     -GameDir "$WORK/nothing" -ScreenWidth 2560 -ScreenHeight 1440 < /dev/null > "$WORK/out2.txt" 2>&1); rc=$?
-check "bad folder fails cleanly" '[ $rc -ne 0 ] && grep -q "ERREUR" "$WORK/out2.txt" && [ ! -e "$WORK/hidden/dinput.dll.bak" ]'
+check "bad folder fails cleanly" '[ $rc -ne 0 ] && grep -q "ERROR" "$WORK/out2.txt" && [ ! -e "$WORK/hidden/dinput.dll.bak" ]'
 
 echo "$pass passed, $fail failed  (work dir: $WORK)"
 [ "$fail" -eq 0 ]
