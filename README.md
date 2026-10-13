@@ -9,68 +9,109 @@ ShogoFPS est un plugin `.asi` chargé par Ultimate ASI Loader. Il agit **uniquem
 
 | Problème d'origine | Cause | Correctif |
 |---|---|---|
-| Au-delà de ~100 FPS, le monde accélère : IA, projectiles, portes, cinématiques (×1,44 à 144 FPS, ×2,4 à 240 FPS). Les répliques se coupent. | Le moteur fait avancer le serveur local une fois par image, d'au moins 10 ms. | Le serveur n'est mis à jour qu'une fois 10 ms écoulées. Le monde garde sa vitesse réelle, à environ 72-100 mises à jour par seconde, comme en multijoueur. |
-| Accélération possible dès ~64 FPS sur certains PC. | Le moteur ne demande jamais le minuteur Windows à 1 ms. | `timeBeginPeriod(1)` pour le processus du jeu. |
-| Visée souris saccadée au-delà de ~64 FPS. | La boucle DirectInput mesure le temps avec `GetTickCount`, qui avance par pas de 15,6 ms. | Cette lecture passe par une horloge à 1 ms, toujours un peu en retard sur l'horloge Windows (condition pour ne pas bloquer la souris). |
+| Au-delà de ~100 FPS, le monde accélère : IA, projectiles, portes, cinématiques. Les répliques se coupent. Avec un minuteur à 1 ms, c'est ×1,44 à 144 FPS et ×2,4 à 240 FPS. Avec le minuteur par défaut de Windows (15,6 ms), ça commence vers 64 FPS et monte à ~×1,8 à 144 FPS. | Le moteur fait avancer le serveur local une fois par image, d'au moins 10 ms à chaque fois. | Le serveur n'est mis à jour qu'une fois 10 ms écoulées. Le monde garde sa vitesse réelle. |
+| Minuteur imprécis. | Le moteur ne demande jamais le minuteur Windows à 1 ms. | `timeBeginPeriod(1)` pour le processus du jeu. |
+| Visée souris saccadée au-delà de ~64 FPS. | La boucle DirectInput mesure le temps avec `GetTickCount`, qui avance par pas de 15,6 ms. | Cette lecture passe par une horloge à 1 ms, toujours un peu en retard sur l'horloge Windows. C'est la condition pour ne jamais bloquer la souris. |
 
-**Ce que ShogoFPS ne corrige pas** : ces défauts sont dans le code de jeu (`CShell.dll`) et demandent de le recompiler, ce qui est le domaine de ShogoFRESH.
-- La visée haut/bas **au clavier** et au joystick va plus vite quand les FPS montent.
-- La poussée verticale des explosions augmente avec les FPS (rocket jump plus haut).
-- Certains effets de particules sont plus denses à haut FPS.
-- À 144 FPS, les objets gérés par le serveur (ennemis, projectiles) bougent à ~72 Hz pendant que la caméra tourne à 144 Hz.
+### Effet du correctif sur la fluidité des ennemis
+
+Le serveur avance au plus toutes les 10 ms. La caméra et ton mecha suivent tes FPS, mais les objets gérés par le serveur (ennemis, projectiles, portes) bougent à la cadence du serveur :
+
+| FPS | Mises à jour du monde par seconde |
+|---|---|
+| jusqu'à ~90 | une par image |
+| 120 | ~60 |
+| 141 | ~70 |
+| 144 | ~72 |
+| 165 | ~82 |
+| 240 | ~80 |
+
+L'écart se voit le plus entre 100 et 140 FPS.
+
+### Ce que ShogoFPS ne corrige pas
+
+Ces défauts sont dans le code de jeu (`CShell.dll`) et demandent de le recompiler, ce qui est le domaine de ShogoFRESH :
+- la visée haut/bas **au clavier** et au joystick va plus vite quand les FPS montent ;
+- la poussée verticale des explosions augmente avec les FPS (rocket jump plus haut) ;
+- certains effets de particules sont plus denses à haut FPS.
 
 ## Installation
 
-1. Installe **Shogo GOG** (2.1.0.7 ou 2.2.14). Pour la VF, choisis le français dans ta bibliothèque GOG.
+1. Installe **Shogo** en version 2.2 :
+   - **GOG** (installeur 2.1.0.7 ou 2.2.14) : pour la VF, choisis le français dans ta bibliothèque GOG ;
+   - **Steam** : la version vendue est elle aussi en 2.2.
 2. *(Recommandé)* Installe **[ShogoFRESH](https://github.com/KyodanCFG/ShogoFRESH)**. Il apporte dgVoodoo2, dinputto8, le widescreen, la musique, etc. Sans lui, il faut au minimum dgVoodoo2 et dinputto8 à la main.
-3. Télécharge **[Ultimate ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases)**, version Win32 (`winmm-Win32.zip`). Copie le `winmm.dll` qu'il contient dans le dossier du jeu, à côté de `Client.exe`.
+3. Télécharge **[Ultimate ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases)**, version Win32 (`winmm-Win32.zip`). Copie le `winmm.dll` qu'il contient dans le dossier du jeu, à côté de `Client.exe`. Si ton archive contient un autre nom (`dinput8.dll`…), renomme-le en `winmm.dll`.
 4. Copie `ShogoFPS.asi` et `ShogoFPS.ini` (dossier `dist/`) dans le dossier du jeu.
-5. Lance le jeu comme d'habitude. Un fichier `ShogoFPS.log` apparaît à côté de la DLL.
+5. Lance le jeu comme d'habitude. Un journal `ShogoFPS.log` est créé :
+   - à côté de la DLL en temps normal ;
+   - dans `%LOCALAPPDATA%\ShogoFPS\` si le jeu est installé sous `Program Files`, où Windows bloque l'écriture.
+
+   La première ligne du journal donne son chemin exact.
 
 Pour désinstaller, supprime `ShogoFPS.asi`, `ShogoFPS.ini` et `ShogoFPS.log`. Supprime aussi `winmm.dll` si aucun autre plugin `.asi` ne s'en sert.
 
-### Réglages conseillés (écran 144 Hz G-Sync)
+### Réglages conseillés
 
-- **ShogoFRESH** : désactive son limiteur de FPS (ou laisse `MaxFPS 0`). Celui du moteur est imprécis et plafonné à 200.
+**Écran 144 Hz G-Sync / FreeSync**
+- **Lanceur ShogoFRESH** : décoche **Frame rate cap**. Il est coché à 120 par défaut et réécrit `MaxFPS` à chaque lancement, donc ne modifie pas `MaxFPS` à la main.
 - **Panneau NVIDIA** → Gérer les paramètres 3D → Paramètres de programme → `Client.exe` :
   - Fréquence d'images maximale : **141** ;
   - Synchronisation verticale : **Activée** ;
   - G-SYNC actif.
 - **dgVoodoo** : VSync désactivée (le pilote s'en charge).
-- **Console du jeu** : `inputrate 10` (valeur de ShogoFRESH, complémentaire du correctif souris).
+
+**Sans G-Sync**
+- Garde un plafond, au choix : le limiteur du pilote, RTSS, ou **Frame rate cap** à 200 dans ShogoFRESH (le moteur ne va de toute façon pas au-delà).
+- Ne dépasse jamais ~500 FPS : au-delà, même l'horloge à 1 ms ne suffit plus à la souris.
+
+**Console du jeu**
+- `inputrate 10` (valeur de ShogoFRESH, complémentaire du correctif souris).
+
+**Démos**
+- Pour enregistrer une démo, mets `ServerTickFix=0` le temps de l'enregistrement.
 
 ## Vérifier que ça marche (2 parties de 2 minutes)
 
-1. Dans `ShogoFPS.ini`, mets `DiagnoseOnly=1`, lance une mission et joue 2 minutes. ShogoFPS ne change rien au jeu, il mesure.
-2. Remets `DiagnoseOnly=0` et rejoue 2 minutes au même endroit.
-3. Envoie les deux `ShogoFPS.log` (le fichier est réécrit à chaque lancement, copie-le entre les deux parties).
+1. Dans `ShogoFPS.ini`, mets `DiagnoseOnly=1`. Lance une mission, joue 2 minutes puis quitte le jeu. Dans ce mode, ShogoFPS ne change rien au jeu : il mesure.
+2. Renomme `ShogoFPS.log` en `ShogoFPS-diagnostic.log`. Le fichier est réécrit à chaque lancement.
+3. Remets `DiagnoseOnly=0`, rejoue 2 minutes au même endroit et quitte.
+4. Envoie-moi les deux journaux dans la conversation.
 
-Lignes importantes du journal :
-- `ready: server tick fix ON, mouse fix ON` : les deux correctifs sont actifs. Si l'un est `off`, les lignes `scan:` ou `mouse:` juste au-dessus disent pourquoi.
-- `game speed x1.000` : le monde va à la vitesse réelle. En mode diagnostic à 144 FPS, on attend environ `x1.44`.
-- `unpatched engine would run x1.44` : estimation de la vitesse qu'aurait le jeu d'origine à ce nombre de FPS.
-- `mouse: ... 2% of reads with no time progress` : souris fluide. Sans le correctif, ce chiffre dépasse 50 % à 144 FPS.
+### Lignes importantes du journal
+
+| Ligne | Ce qu'elle signifie |
+|---|---|
+| `ready: server tick fix ON, mouse fix ON` | Les deux correctifs sont posés. Si l'un est `off`, les lignes `scan:` ou `mouse:` juste au-dessus disent pourquoi. |
+| `mouse: fine clock active, 20 ms behind GetTickCount` | La souris est réellement corrigée. Si tu lis `pass-through`, elle ne l'est pas (par exemple si `TimerResolution=0`). |
+| `self-check ok (0/32 mismatches)` | Le moteur range son temps là où ShogoFPS l'attend. Un `self-check FAILED` désactive le saut des mises à jour ; le minuteur et la souris restent corrigés. |
+| `game speed x1.000` | Le monde va à la vitesse réelle. En mode diagnostic, on attend ~`x1.44` à 144 FPS si la ligne `timer:` indique un pas de 1 ms, ~`x1.8` si elle indique 15 ou 16 ms. |
+| `unpatched engine would run x1.44 (timer step 1 ms)` | Vitesse qu'aurait le jeu d'origine à ces FPS, avec le minuteur indiqué. |
+| `skipped`, `valve`, `frozen-clock`, `inactive` | Mises à jour sautées (normal au-dessus de ~100 FPS), forcées après 100 ms sans mise à jour, cadencées pendant que la fenêtre est en arrière-plan avec `alwaysfocused 1`, et passées telles quelles fenêtre inactive. |
+| `mouse: ... 0% of reads with no time progress` | Souris fluide. Sans le correctif, ce chiffre dépasse 50 % à 144 FPS. |
 
 ## Sécurité du correctif
 
-ShogoFPS ne s'active que dans `Client.exe` et ne fait rien dans les autres programmes (lanceur `Shogo.exe`, serveur dédié…).
+ShogoFPS ne s'active que dans `Client.exe`. Il ne fait rien dans les autres programmes (lanceur `Shogo.exe`, serveur dédié…).
 
-Avant de toucher quoi que ce soit, il vérifie que l'exécutable a la structure attendue, sans adresse codée en dur :
+Avant de toucher quoi que ce soit, il vérifie la structure de l'exécutable, sans aucune adresse codée en dur :
 - les constantes de temps du moteur ;
 - les chaînes repères autour de la mise à jour du serveur ;
-- l'appel unique à cette fonction ;
-- les champs qu'elle utilise.
+- l'appel unique à cette fonction, sa convention d'appel et les champs qu'elle utilise.
 
-Au moindre doute, il s'abstient et l'écrit dans le journal. En cours de partie, il contrôle aussi que le moteur range son temps là où il l'attend. Sinon il se désactive : le jeu tourne alors exactement comme sans lui.
+Si la détection est ambiguë (et au moindre doute avec `Strict=1`), il s'abstient et l'écrit dans le journal.
+
+En cours de partie, il contrôle aussi que le moteur range son temps là où il l'attend. Sinon, il arrête de sauter des mises à jour.
 
 ## Compilation
 
-Depuis Linux :
+Depuis Linux (Debian/Ubuntu) :
 
 ```sh
-sudo apt install gcc-mingw-w64-i686 wine wine32:i386
+sudo dpkg --add-architecture i386 && sudo apt update
+sudo apt install gcc-mingw-w64-i686 wine wine32:i386 python3
 make            # produit dist/ShogoFPS.asi
-make test       # 12 tests sous Wine, avec un faux Client.exe qui imite la mécanique du moteur
+make test       # 21 tests sous Wine, avec un faux Client.exe qui imite la mécanique du moteur
 ```
 
 ## Mentions

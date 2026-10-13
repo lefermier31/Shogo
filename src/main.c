@@ -16,7 +16,7 @@ static void load_config(HMODULE self)
     g_cfg.mouse_fix = 1;
     g_cfg.timer_resolution = 1;
     g_cfg.min_tick_ms = 10;
-    g_cfg.mouse_lag_ms = 16;
+    g_cfg.mouse_lag_ms = 20;
     g_cfg.diagnose_only = 0;
     g_cfg.strict = 0;
     g_cfg.log_enabled = 1;
@@ -36,9 +36,12 @@ static void load_config(HMODULE self)
     GETI("Strict", strict);
     GETI("Log", log_enabled);
     GETI("StatsInterval", stats_interval);
+    GETI("ValveMs", valve_ms);
 #undef GETI
     if (g_cfg.stats_interval < 5)
         g_cfg.stats_interval = 5;
+    if (g_cfg.valve_ms < 50)
+        g_cfg.valve_ms = 50;
 }
 
 static int host_is_client_exe(void)

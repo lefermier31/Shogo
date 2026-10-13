@@ -11,6 +11,8 @@
  * subtracts it from DirectInput event timestamps (GetTickCount domain) as
  * unsigned values, and a negative gap would freeze the mouse. It is kept a
  * few milliseconds behind, rises monotonically, and is clamped every call.
+ * Integer arithmetic only: this runs on a thread whose x87 unit is in 24-bit
+ * precision.
  */
 #include "shogofps.h"
 #include <stdio.h>
@@ -23,9 +25,11 @@ static int g_ready; /* 0 = calibrate on first call, 1 = fine clock, -1 = pass-th
 static DWORD g_offset;
 static DWORD g_lag;
 static DWORD g_last_out;
+static DWORD g_prev_real;
 static int g_have_last;
 
 static unsigned g_calls, g_still, g_guard, g_catchup;
+static DWORD g_lag_min = 0xFFFFFFFFu, g_lag_max;
 
 static DWORD *find_import(const pe_t *pe, const char *dll, const char *func, DWORD expected)
 {
@@ -83,7 +87,7 @@ static int count_refs(const pe_t *pe, uint32_t value)
 static void calibrate(void)
 {
     DWORD a, b;
-    double end;
+    LONGLONG end;
 
     timing_init_late();
     if (g_cfg.diagnose_only) {
@@ -92,15 +96,16 @@ static void calibrate(void)
     }
     if (!real_timeGetTime || !timing_fine_clock()) {
         g_ready = -1;
-        log_printf("mouse: timeGetTime is not fine-grained, mouse fix stays in pass-through");
+        log_printf("mouse: timeGetTime is not fine-grained (TimerResolution=0 or request refused), "
+                   "mouse fix stays in pass-through");
         return;
     }
     /* Align on a GetTickCount edge so the lag is exact. */
     a = real_GetTickCount();
-    end = qpc_seconds() + 0.05;
+    end = qpc_ticks() + ms_to_ticks(40);
     do {
         b = real_GetTickCount();
-    } while (b == a && qpc_seconds() < end);
+    } while (b == a && qpc_ticks() < end);
     if (b == a) {
         g_ready = -1;
         log_printf("mouse: GetTickCount did not move, mouse fix stays in pass-through");
@@ -111,13 +116,20 @@ static void calibrate(void)
     log_printf("mouse: fine clock active, %lu ms behind GetTickCount", g_lag);
 }
 
+/*
+ * Lag: GetTickCount steps are 15-16 ms on Windows (up to 19 ms under Wine).
+ * With the clock `lag` ms behind at each edge, it only reaches the bound when
+ * a step is longer than the lag, so the default of 20 ms rarely needs the guard.
+ */
 static DWORD WINAPI GAME_ENTRY shogo_tick(void)
 {
-    DWORD real = real_GetTickCount();
-    DWORD g = real - 1, f;
+    DWORD real, g, f;
 
+    /* Calibrate first: it blocks for a few ms, and the reading must come after. */
     if (g_ready == 0)
         calibrate();
+    real = real_GetTickCount();
+    g = real - 1;
     if (g_cfg.diagnose_only) {
         f = real;
     } else if (g_ready != 1) {
@@ -125,17 +137,30 @@ static DWORD WINAPI GAME_ENTRY shogo_tick(void)
     } else {
         f = real_timeGetTime() + g_offset;
         if ((int32_t)(f - g) > 0) {
-            g_offset -= f - g;
+            /* Hold at the bound. A long GetTickCount step overshoots by a few ms
+               and must not move the clock; only a sustained gain is corrected,
+               1 ms at a time, so the lag never drifts. */
+            if ((int32_t)(f - g) > 3)
+                g_offset -= 1;
             f = g;
             g_guard++;
-        } else if ((int32_t)(g - f) > (int32_t)(g_lag + 48)) {
-            g_offset += (g - g_lag) - f;
-            f = g - g_lag;
+        } else if (real != g_prev_real && (int32_t)(g - f) > (int32_t)(g_lag + 32)) {
+            /* Fell far behind (sleep, long stall): re-align right after an edge. */
+            g_offset += (real - g_lag) - f;
+            f = real - g_lag;
             g_catchup++;
         }
     }
+    g_prev_real = real;
     if (g_have_last && (int32_t)(f - g_last_out) < 0)
         f = g_last_out;
+    if (g_ready == 1) {
+        DWORD lag = real - f;
+        if (lag < g_lag_min)
+            g_lag_min = lag;
+        if (lag > g_lag_max)
+            g_lag_max = lag;
+    }
     g_calls++;
     if (g_have_last && f == g_last_out)
         g_still++;
@@ -204,10 +229,24 @@ void mousefix_uninstall(void)
 
 void mousefix_stats(char *buf, int len, double window_s)
 {
+    int n;
+    double still;
+
     buf[0] = 0;
     if (!g_installed || g_calls == 0)
         return;
-    snprintf(buf, len, "mouse: %.1f reads/s, %.0f%% of reads with no time progress, guard %u, catch-up %u",
-             g_calls / window_s, 100.0 * g_still / g_calls, g_guard, g_catchup);
+    still = 100.0 * g_still / g_calls;
+    n = snprintf(buf, len, "mouse: %.1f reads/s, %.0f%% of reads with no time progress",
+                 g_calls / window_s, still);
+    if (n > 0 && n < len && g_ready == 1) {
+        n += snprintf(buf + n, len - n, ", clock %lu-%lu ms behind, guard %u, catch-up %u",
+                      g_lag_min, g_lag_max, g_guard, g_catchup);
+        if (n > 0 && n < len && still > 30.0)
+            snprintf(buf + n, len - n, " - too many frames per second for the mouse, cap at 500 fps or less");
+    } else if (n > 0 && n < len && g_ready == -1 && !g_cfg.diagnose_only) {
+        snprintf(buf + n, len - n, " (pass-through: mouse NOT fixed)");
+    }
     g_calls = g_still = g_guard = g_catchup = 0;
+    g_lag_min = 0xFFFFFFFFu;
+    g_lag_max = 0;
 }

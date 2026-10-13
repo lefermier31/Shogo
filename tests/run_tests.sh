@@ -13,9 +13,12 @@ CFLAGS="-O2 -mfpmath=387 -mno-sse"
 fail=0
 pass=0
 
-build_fake() { # $1 = output name, rest = extra flags
-    local out="$1"; shift
-    $CC $CFLAGS "$@" "$HERE/fake_client.c" -o "$WORK/$out" -lwinmm || exit 1
+# build_fake <dir> [extra flags]: a client.exe in its own folder, next to the plugin
+build_fake() {
+    local dir="$WORK/$1"; shift
+    mkdir -p "$dir"
+    cp "$ROOT/dist/ShogoFPS.asi" "$dir/" || { echo "build dist/ShogoFPS.asi first"; exit 1; }
+    $CC $CFLAGS "$@" "$HERE/fake_client.c" -o "$dir/client.exe" -lwinmm || exit 1
 }
 
 # run <name> <exe path relative to WORK> <ini lines or -> -- <args...>
@@ -43,57 +46,86 @@ log = open(logf).read() if os.path.exists(logf) else ""
 ok = eval(expr)
 if not ok:
     print("  RESULT", m.group(1))
-    if log: print("  log tail:\n    " + "\n    ".join(log.strip().splitlines()[-8:]))
+    if log: print("  log tail:\n    " + "\n    ".join(log.strip().splitlines()[-10:]))
 sys.exit(0 if ok else 1)
 EOF
     then echo "PASS $name"; pass=$((pass+1)); else echo "FAIL $name  ($expr)"; fail=$((fail+1)); fi
 }
 
-cp "$ROOT/dist/ShogoFPS.asi" "$WORK/" || { echo "build dist/ShogoFPS.asi first"; exit 1; }
-build_fake client.exe
-mkdir -p "$WORK/decoy" && cp "$WORK/ShogoFPS.asi" "$WORK/decoy/"
-build_fake decoy/client.exe -DDECOY_CLAMP
+build_fake std
+build_fake decoy -DDECOY_CLAMP
+build_fake badlayout -DBAD_LAYOUT
+build_fake nofocus -DNO_FOCUS_ANCHOR
+build_fake twocallers -DTWO_CALLERS
+cp "$WORK/std/client.exe" "$WORK/std/other.exe"
 
 SPEED_OK='0.98 <= r["ratio"] <= 1.03 and r["errors"] == 0'
 FAST='r["ratio"] > 2.2'
+MOUSE_OK='r["ahead"] == 0 and r["backwards"] == 0 and r["still"] < 0.1 * r["reads"] and r["maxlag"] <= 26'
 
-run baseline client.exe - -- --no-load --frames 1500 --frame-ms 4
-check baseline "$FAST and r['errors'] == 0"
+run baseline std/client.exe - -- --no-load --frames 1500 --frame-ms 4
+check baseline "$FAST and r['errors'] == 0 and r['still'] > 0.5 * r['reads']"
 
-run fix_250 client.exe - -- --frames 1500 --frame-ms 4
-check fix_250 "$SPEED_OK and 'server tick fix ON, mouse fix ON' in log and 'self-check ok' in log \
-  and r['ahead'] == 0 and r['backwards'] == 0 and r['still'] < 0.1 * r['reads']"
+run fix_250 std/client.exe - -- --frames 1500 --frame-ms 4
+check fix_250 "$SPEED_OK and $MOUSE_OK and 'server tick fix ON, mouse fix ON' in log \
+  and 'self-check ok (0/32' in log and 'fine clock active' in log and 'catch-up 0' in log"
 
-run fix_60 client.exe - -- --frames 400 --frame-ms 16.667
+run fix_60 std/client.exe - -- --frames 400 --frame-ms 16.667
 check fix_60 "$SPEED_OK and 'skipped 0,' in log"
 
-run fix_1000 client.exe - -- --frames 5000 --frame-ms 1
+run fix_1000 std/client.exe - -- --frames 5000 --frame-ms 1
 check fix_1000 "$SPEED_OK and r['ahead'] == 0 and r['backwards'] == 0"
 
-run fix_jitter client.exe - -- --frames 1500 --jitter
-check fix_jitter "$SPEED_OK"
+run fix_jitter std/client.exe - -- --frames 1500 --jitter
+check fix_jitter "$SPEED_OK and $MOUSE_OK"
 
-run fix_inactive client.exe - -- --frames 1000 --frame-ms 4 --inactive 200 600
-check fix_inactive "r['errors'] == 0 and r['inactive_updates'] == r['inactive_frames'] == 400"
+run inactive std/client.exe - -- --frames 1000 --frame-ms 4 --inactive 200 600 --freeze
+check inactive "r['errors'] == 0 and r['inactive_updates'] == r['inactive_frames'] == 400"
 
-run diagnose client.exe 'DiagnoseOnly=1' -- --frames 1500 --frame-ms 4
+run frozen_alwaysfocused std/client.exe - -- --frames 2500 --frame-ms 4 --inactive 500 2000 --freeze --focus-lock
+check frozen_alwaysfocused "r['errors'] == 0 and 0.9 <= r['span_speed'] <= 1.1 and re.search(r'frozen-clock [1-9]', log)"
+
+run level_load std/client.exe - -- --frames 2000 --frame-ms 4 --load-at 800
+check level_load "r['errors'] == 0 and re.search(r'game speed x(0\.9[89]|1\.0[0-2])', log)"
+
+run pc24_7days std/client.exe - -- --frames 1500 --frame-ms 4 --pc24 --qpc-days 7
+check pc24_7days "$SPEED_OK and $MOUSE_OK and 'fine clock active' in log and '24-bit' in log"
+
+run pc24_13days std/client.exe - -- --frames 1500 --frame-ms 4 --pc24 --qpc-days 13
+check pc24_13days "$SPEED_OK and $MOUSE_OK and 'fine clock active' in log and 'valve 0,' in log"
+
+run diagnose std/client.exe 'DiagnoseOnly=1' -- --frames 1500 --frame-ms 4
 check diagnose "$FAST and 'DIAGNOSE ONLY' in log and re.search(r'unpatched engine would run x2\.[3-6]', log) \
-  and r['still'] > 0.3 * r['reads']"
+  and r['still'] > 0.5 * r['reads']"
 
-run min_tick_16 client.exe 'MinTickMs=16' -- --frames 1500 --frame-ms 4
+run min_tick_16 std/client.exe 'MinTickMs=16' -- --frames 1500 --frame-ms 4
 check min_tick_16 "$SPEED_OK and r['updates'] < 1500 * 4 / 16 + 20"
 
-run strict client.exe 'Strict=1' -- --frames 1500 --frame-ms 4
+run strict std/client.exe 'Strict=1' -- --frames 1500 --frame-ms 4
 check strict "$SPEED_OK and 'server tick fix ON, mouse fix ON' in log"
 
-run all_off client.exe 'ServerTickFix=0\nMouseFix=0' -- --frames 1500 --frame-ms 4
+run timer_off std/client.exe 'TimerResolution=0' -- --frames 1500 --frame-ms 4
+check timer_off "$SPEED_OK and r['ahead'] == 0"
+
+run all_off std/client.exe 'ServerTickFix=0\nMouseFix=0' -- --frames 1500 --frame-ms 4
 check all_off "$FAST and 'server tick fix off, mouse fix off' in log"
 
 run decoy decoy/client.exe - -- --frames 1500 --frame-ms 4
 check decoy "$FAST and 'clamp candidates' in log and 'mouse fix ON' in log and r['errors'] == 0"
 
-cp "$WORK/client.exe" "$WORK/other.exe"
-run other_process other.exe - -- --frames 600 --frame-ms 4
+run bad_layout badlayout/client.exe - -- --frames 1500 --frame-ms 4
+check bad_layout "r['ratio'] > 2.0 and r['errors'] == 0 and 'self-check FAILED' in log and 'self-check ok' not in log"
+
+run bad_layout_diag badlayout/client.exe 'DiagnoseOnly=1' -- --frames 1500 --frame-ms 4
+check bad_layout_diag "'would be disabled (diagnose mode)' in log and 'self-check ok' not in log"
+
+run no_focus_anchor nofocus/client.exe - -- --frames 1500 --frame-ms 4
+check no_focus_anchor "$FAST and r['errors'] == 0 and \"anchor 'alwaysfocused' missing\" in log and 'mouse fix ON' in log"
+
+run two_callers twocallers/client.exe - -- --frames 1500 --frame-ms 4
+check two_callers "$FAST and r['errors'] == 0 and 'candidate update functions' in log"
+
+run other_process std/other.exe - -- --frames 600 --frame-ms 4
 check other_process "$FAST and log == ''"
 
 echo "$pass passed, $fail failed  (work dir: $WORK)"

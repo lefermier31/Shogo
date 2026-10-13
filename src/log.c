@@ -5,6 +5,36 @@
 
 static HANDLE g_log = INVALID_HANDLE_VALUE;
 
+static int starts_with_env_dir(const char *path, const char *var)
+{
+    char dir[MAX_PATH];
+    DWORD n = GetEnvironmentVariableA(var, dir, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH)
+        return 0;
+    return CompareStringA(LOCALE_INVARIANT, NORM_IGNORECASE, path, (int)n, dir, (int)n) == CSTR_EQUAL &&
+           (path[n] == '\\' || path[n] == 0);
+}
+
+/*
+ * A 1998 executable without a manifest runs with UAC file virtualization: a
+ * log created under Program Files would silently land in VirtualStore. Use
+ * %LOCALAPPDATA%\ShogoFPS instead in that case.
+ */
+static int needs_relocation(const char *path)
+{
+    HANDLE tok;
+    DWORD virt = 0, len = 0;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tok))
+        return 0;
+    if (!GetTokenInformation(tok, TokenVirtualizationEnabled, &virt, sizeof virt, &len))
+        virt = 0;
+    CloseHandle(tok);
+    return virt && (starts_with_env_dir(path, "ProgramFiles") ||
+                    starts_with_env_dir(path, "ProgramFiles(x86)") ||
+                    starts_with_env_dir(path, "ProgramW6432") ||
+                    starts_with_env_dir(path, "SystemRoot"));
+}
+
 void log_open(HMODULE self)
 {
     char path[MAX_PATH];
@@ -16,12 +46,22 @@ void log_open(HMODULE self)
     n = GetModuleFileNameA(self, path, MAX_PATH);
     if (n == 0 || n >= MAX_PATH - 16)
         return;
-    slash = strrchr(path, '\\');
-    if (!slash)
-        return;
-    strcpy(slash + 1, "ShogoFPS.log");
+    if (needs_relocation(path)) {
+        n = GetEnvironmentVariableA("LOCALAPPDATA", path, MAX_PATH - 32);
+        if (n == 0 || n >= MAX_PATH - 32)
+            return;
+        lstrcatA(path, "\\ShogoFPS");
+        CreateDirectoryA(path, NULL);
+        lstrcatA(path, "\\ShogoFPS.log");
+    } else {
+        slash = strrchr(path, '\\');
+        if (!slash)
+            return;
+        strcpy(slash + 1, "ShogoFPS.log");
+    }
     g_log = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
                         FILE_ATTRIBUTE_NORMAL, NULL);
+    log_printf("log file: %s", path);
 }
 
 void log_printf(const char *fmt, ...)

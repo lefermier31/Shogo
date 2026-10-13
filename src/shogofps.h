@@ -8,7 +8,7 @@
 #include <windows.h>
 #include <stdint.h>
 
-#define SHOGOFPS_VERSION "0.1.0"
+#define SHOGOFPS_VERSION "0.2.0"
 
 /* Entry points called from game code: honour the MSVC caller's 4-byte stack. */
 #define GAME_ENTRY __attribute__((force_align_arg_pointer))
@@ -66,8 +66,11 @@ extern dword_fn real_timeGetTime;    /* NULL until timing_init_late() */
 
 void timing_init_early(void);        /* safe under the loader lock */
 void timing_init_late(void);         /* first call from a game hook */
-double qpc_seconds(void);
+LONGLONG qpc_ticks(void);            /* QPC ticks since the DLL was loaded */
+LONGLONG ms_to_ticks(int ms);
+double ticks_to_seconds(LONGLONG t); /* short intervals only */
 int timing_fine_clock(void);         /* 1 if timeGetTime now ticks in ~1 ms steps */
+DWORD timing_step_ms(void);          /* timeGetTime step measured at start-up */
 void timing_shutdown(void);
 
 /* servertick.c */
