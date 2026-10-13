@@ -143,12 +143,15 @@ static DWORD g_max_lag;
 
 __attribute__((noipa)) void ReadInput(void)
 {
+    /* Real clock read on both sides: a preemption between two reads can then neither
+       hide a read ahead of time nor inflate the measured lag. */
+    DWORD before = real_gtc();
     DWORD now = GetTickCount(); /* through the import table */
-    DWORD real = real_gtc();
-    if ((int)(now - real) > 0)
+    DWORD after = real_gtc();
+    if ((int)(now - after) > 0)
         g_ahead++;
-    else if (g_frame > 200 && real - now > g_max_lag)
-        g_max_lag = real - now;
+    else if (g_frame > 200 && (int)(before - now) > (int)g_max_lag)
+        g_max_lag = before - now;
     if (g_reads && (int)(now - g_prev_tick) < 0)
         g_backwards++;
     if (g_reads && now == g_prev_tick)

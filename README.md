@@ -39,28 +39,47 @@ These issues live in the game code (`CShell.dll`). Fixing them means recompiling
 
 The installer downloads each component from its official release page and checks its SHA256. It installs everything into the game folder, temporary downloads included, and configures the game for your display. It needs neither administrator rights nor ShogoFRESH.
 
-1. Download this repository: **Code** → **Download ZIP**, then extract it anywhere.
-2. Close Shogo if it is running, then double-click `installer\Install-ShogoMods.bat`.
-3. The installer finds the game on its own: GOG registry first, then a search of your drives. Otherwise it asks for the folder that contains `Client.exe`.
+1. Download this repository: **Code** → **Download ZIP**. Before extracting it, right-click the `.zip` → **Properties** → tick **Unblock** → **OK**. Then extract the whole ZIP anywhere.
+2. Close Shogo if it is running, then double-click `installer\Install-ShogoMods.bat`. If Windows shows "Windows protected your PC", click **More info** → **Run anyway** (the ZIP was not unblocked).
+3. The installer finds the game on its own: GOG or Steam registry first. Failing that, it searches your drives and asks you to confirm the folder it found, or to type the folder that contains `Client.exe`.
 4. If it reports that `autoexec.cfg` does not exist yet, start the game once with `Shogo.exe`, quit, and run the installer again.
 5. Play with the **Shogo (ShogoFPS)** shortcut it puts on the desktop.
+
+It downloads and checks everything first, and only then changes the game folder. If something fails halfway (network, antivirus), run it again to finish, or run `Uninstall-ShogoMods.bat` to go back.
 
 What gets installed and configured:
 
 | Component | Role |
 |---|---|
 | dinputto8 1.1.100.0 | The game starts on Windows 10/11 |
-| dgVoodoo2 2.87.5 | Modern Direct3D rendering: fullscreen, 3D at your display's resolution, 16x filtering, 4x antialiasing, 2 GB video memory, no watermark |
+| dgVoodoo2 2.87.5 | Modern Direct3D rendering: fullscreen at your display's refresh rate, 3D at its resolution, 16x filtering, 4x antialiasing, no watermark, frame cap 3 fps below the refresh rate (141 on a 144 Hz display) |
 | Ultimate ASI Loader 9.7.4 | Loads `.asi` plugins (installed as `winmm.dll`) |
 | AlphaYellow FOV fix 1.3 | Correct field of view in 16:9 |
 | ShogoFPS | Real game speed at high fps, smooth mouse |
-| `autoexec.cfg` | Resolution, high detail, 16-bit textures, `inputrate 10`, frame cap 3 fps below the refresh rate (141 on a 144 Hz display) |
+| `autoexec.cfg` | Resolution, high detail (custom details are kept), 16-bit textures, `inputrate 10`, the game's own frame limiter off (`MaxFPS 0`, dgVoodoo caps instead) |
 
-**Resolution.** By default the game runs at 1280x720 while dgVoodoo renders the 3D at your display's resolution. The picture stays sharp and the 1998 HUD stays readable. For everything at native resolution (tiny HUD), run `Install-ShogoMods.bat -NativeResolution`.
+**Resolution.** On a display with at least 1440 lines, the game runs at half or a third of it (1280x720 on 1440p and 4K) while dgVoodoo renders the 3D at full resolution. The picture stays sharp and the 1998 HUD stays readable, scaled by a whole factor so its pixels stay even. On other displays (1080p, 1200p...) the game runs at native resolution. For native resolution everywhere (tiny HUD on large displays), run `Install-ShogoMods.bat -NativeResolution`.
 
-**The FOV fix** is only published as a `.rar`. The installer opens it with Windows' built-in `tar` when that version can, otherwise with 7-Zip or WinRAR if installed. If none works, it says so and carries on without this fix.
+**Frame cap.** dgVoodoo caps the frame rate 3 fps below your refresh rate, which keeps G-Sync/FreeSync active. The game's own limiter is turned off: it waits in whole Windows timer steps, so without ShogoFPS's 1 ms timer it would hold the game at 64 fps.
 
-**Backups.** Every file it replaces or edits is first saved to `ShogoMods_Backup` in the game folder. Running the installer again is safe, and `installer\Uninstall-ShogoMods.bat` puts everything back. If ShogoFRESH is installed, the installer leaves dinputto8 and dgVoodoo to it.
+**The FOV fix** is only published as a `.rar`. The installer opens it with Windows' built-in `tar` when that version can, otherwise with 7-Zip or WinRAR if installed. If none works, or if the file is no longer online (its author replaces old releases), it says so and carries on without this fix.
+
+**Backups.** Every file it replaces or edits is first saved to `ShogoMods_Backup` in the game folder. Running the installer again is safe, and `installer\Uninstall-ShogoMods.bat` puts everything back:
+- the current `autoexec.cfg` (your key bindings and settings since the install) is kept as `autoexec.cfg.before-uninstall` before the original comes back;
+- a file another program replaced since the install (a newer dgVoodoo, for example) is left in place.
+
+**ShogoFRESH.** If ShogoFRESH is installed, the installer only adds the ASI loader and ShogoFPS. dinputto8, dgVoodoo, the field of view and the game settings stay ShogoFRESH's, and no shortcut is created: play through the ShogoFRESH launcher, with its **Frame rate cap** set 3 below your refresh rate (or unticked, with the cap set in your graphics driver).
+
+**Options.** From a command prompt in the `installer` folder, for example `Install-ShogoMods.bat -NativeResolution`:
+
+| Option | Effect |
+|---|---|
+| `-GameDir "D:\GOG Games\Shogo"` | Game folder, when the installer does not find it |
+| `-NativeResolution` | Game at the display's resolution |
+| `-NoFovFix` | No FOV fix (turns off one already installed) |
+| `-NoShortcut` | No desktop shortcut |
+| `-ScreenWidth 2560 -ScreenHeight 1440 -RefreshRate 144` | Display mode, if the installer cannot read it |
+| `-NoSearch` | With a wrong `-GameDir`, stop instead of searching the drives |
 
 ## Manual install
 
@@ -84,15 +103,17 @@ To uninstall, delete `ShogoFPS.asi`, `ShogoFPS.ini` and `ShogoFPS.log`. Delete `
 The automatic installer already takes care of what matters. These settings are for a manual install, or to go further.
 
 **144 Hz G-Sync / FreeSync display**
-- **ShogoFRESH launcher** (if you use it): untick **Frame rate cap**. It is ticked at 120 by default and rewrites `MaxFPS` on every launch, so don't edit `MaxFPS` by hand.
-- **NVIDIA Control Panel** → Manage 3D settings → Program settings → `Client.exe`:
-  - Max Frame Rate: **141**;
-  - Vertical sync: **On**;
-  - G-SYNC enabled.
+- **Frame cap 3 fps below the refresh rate** (141 at 144 Hz), with one of:
+  - dgVoodoo: `FPSLimit = 141` in the `[GeneralExt]` section of `dgVoodoo.conf` (what the installer does);
+  - **NVIDIA Control Panel** → Manage 3D settings → Program settings → `Client.exe` → Max Frame Rate: **141**;
+  - the **ShogoFRESH launcher**'s **Frame rate cap** (ticked at 120 by default; it rewrites `MaxFPS` on every launch, so don't edit `MaxFPS` by hand).
+- **NVIDIA Control Panel**, same page: Vertical sync **On**, G-SYNC enabled.
 - **dgVoodoo**: VSync off (the driver handles it).
 
+The game's own limiter (`MaxFPS`, which ShogoFRESH's cap also sets) waits in whole Windows timer steps. With ShogoFPS's 1 ms timer it gives ~125-140 fps for a 141 target; without it, 64 fps at most.
+
 **Without G-Sync**
-- Keep a frame cap, whichever you like: the driver limiter, RTSS, or **Frame rate cap** at 200 in ShogoFRESH (the engine goes no higher anyway).
+- Keep a frame cap, whichever you like: dgVoodoo, the driver limiter, RTSS, or ShogoFRESH's **Frame rate cap**.
 - Never go beyond ~500 fps: past that point even the 1 ms clock is not enough for the mouse.
 
 **Game console**
@@ -103,7 +124,7 @@ The automatic installer already takes care of what matters. These settings are f
 
 ## Checking that it works (two 2-minute sessions)
 
-1. In `ShogoFPS.ini`, set `DiagnoseOnly=1`. Start a mission, play for 2 minutes, then quit. In this mode ShogoFPS changes nothing in the game: it only measures.
+1. In `ShogoFPS.ini`, set `DiagnoseOnly=1`. Start a mission, play for 2 minutes, then quit. In this mode ShogoFPS changes nothing in the game: it only measures. Keep the frame cap outside the game (dgVoodoo or the driver, as the installer sets it): the game's own `MaxFPS` limiter would hold this session at 64 fps.
 2. Rename `ShogoFPS.log` to `ShogoFPS-diagnostic.log`. The file is rewritten on every launch.
 3. Set `DiagnoseOnly=0` back, play 2 minutes at the same spot, then quit.
 4. Send both logs.
@@ -115,7 +136,7 @@ The automatic installer already takes care of what matters. These settings are f
 | `ready: server tick fix ON, mouse fix ON` | Both fixes are in place. If one says `off`, the `scan:` or `mouse:` lines just above say why. |
 | `mouse: fine clock active, 20 ms behind GetTickCount` | The mouse really is fixed. If you read `pass-through` instead, it is not (for example with `TimerResolution=0`). |
 | `self-check ok (0/32 mismatches)` | The engine keeps its time where ShogoFPS expects it. A `self-check FAILED` turns update skipping off; the timer and mouse fixes stay on. |
-| `game speed x1.000` | The world runs at real speed. In diagnose mode at 144 fps, expect ~`x1.44` if the `timer:` line shows a 1 ms step, ~`x1.8` if it shows 15 or 16 ms. |
+| `game speed x1.000` | The world runs at real speed. In diagnose mode at ~141 fps, expect ~`x1.4` if the `timer:` line shows a 1 ms step, ~`x1.8` if it shows 15 or 16 ms. |
 | `unpatched engine would run x1.44 (timer step 1 ms)` | The speed the original game would have at this frame rate, with the timer shown. |
 | `skipped`, `valve`, `frozen-clock`, `inactive` | Updates skipped (normal above ~100 fps), updates forced after 100 ms without one, updates paced while the window is in the background with `alwaysfocused 1`, and updates passed through unchanged while the window is inactive. |
 | `mouse: ... 0% of reads with no time progress` | Smooth mouse. Without the fix, this goes over 50% at 144 fps. |
@@ -139,10 +160,10 @@ On Linux (Debian/Ubuntu):
 
 ```sh
 sudo dpkg --add-architecture i386 && sudo apt update
-sudo apt install gcc-mingw-w64-i686 wine wine32:i386 python3
+sudo apt install gcc-mingw-w64-i686 wine wine32:i386 python3 libarchive-tools
 make            # builds dist/ShogoFPS.asi
 make test       # 22 Wine tests, against a fake Client.exe that mimics the engine's mechanics
-PWSH=pwsh installer/tests/test_installer.sh   # 34 installer tests (PowerShell 7, fake game folder)
+PWSH=pwsh installer/tests/test_installer.sh   # 57 installer tests (PowerShell 7, fake game folders, real downloads)
 ```
 
 ## Credits
