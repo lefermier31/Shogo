@@ -35,17 +35,45 @@ Ces défauts sont dans le code de jeu (`CShell.dll`) et demandent de le recompil
 - la poussée verticale des explosions augmente avec les FPS (rocket jump plus haut) ;
 - certains effets de particules sont plus denses à haut FPS.
 
-## Installation
+## Installation automatique (recommandée)
+
+L'installeur télécharge chaque composant depuis sa page officielle et vérifie son empreinte SHA256. Il installe tout dans le dossier du jeu (D: chez toi, téléchargements temporaires compris) et règle le jeu pour ton écran. Il n'a pas besoin des droits administrateur, ni de ShogoFRESH.
+
+1. Télécharge ce dépôt : bouton **Code** → **Download ZIP**, puis décompresse-le où tu veux, par exemple sur D:.
+2. Ferme Shogo s'il est ouvert, puis double-clique sur `installer\Install-ShogoMods.bat`.
+3. L'installeur trouve le jeu tout seul (registre GOG, puis recherche sur les disques). Sinon, il te demande le dossier qui contient `Client.exe`.
+4. S'il indique qu'`autoexec.cfg` n'existe pas encore : lance le jeu une fois avec `Shogo.exe`, quitte-le, puis relance l'installeur.
+5. Joue avec le raccourci **Shogo (ShogoFPS)** créé sur le bureau.
+
+Ce qui est installé et réglé :
+
+| Composant | Rôle |
+|---|---|
+| dinputto8 1.1.100.0 | Le jeu démarre sous Windows 10/11 |
+| dgVoodoo2 2.87.5 | Rendu Direct3D moderne : plein écran, 3D à la résolution de l'écran, filtrage x16, antialiasing 4x, 2 Go de mémoire vidéo, sans filigrane |
+| Ultimate ASI Loader 9.7.4 | Charge les plugins `.asi` (installé sous le nom `winmm.dll`) |
+| FOV fix AlphaYellow 1.3 | Champ de vision correct en 16:9 |
+| ShogoFPS | Vitesse réelle à haut FPS, souris fluide |
+| `autoexec.cfg` | Résolution, détails élevés, textures 16 bits, `inputrate 10`, limite à 141 FPS sur un écran 144 Hz |
+
+**Résolution.** Par défaut, le jeu tourne en 1280x720 pendant que dgVoodoo rend la 3D à la résolution de ton écran : l'image reste nette et le HUD de 1998 garde une taille lisible. Pour tout en résolution native (HUD minuscule), lance `Install-ShogoMods.bat -NativeResolution`.
+
+**Le correctif FOV** n'est publié qu'en `.rar`. L'installeur l'ouvre avec le `tar` de Windows s'il en est capable, sinon avec 7-Zip ou WinRAR s'ils sont installés. Si aucun ne marche, il le signale et continue sans ce correctif.
+
+**Sauvegardes.** Chaque fichier remplacé ou modifié est d'abord sauvegardé dans `ShogoMods_Backup`, dans le dossier du jeu. Tu peux relancer l'installeur sans risque. `installer\Uninstall-ShogoMods.bat` remet tout comme avant. Si ShogoFRESH est installé, l'installeur lui laisse dinputto8 et dgVoodoo.
+
+## Installation manuelle
 
 1. Installe **Shogo** en version 2.2 :
    - **GOG** (installeur 2.1.0.7 ou 2.2.14) : pour la VF, choisis le français dans ta bibliothèque GOG ;
    - **Steam** : la version vendue est elle aussi en 2.2.
-2. *(Recommandé)* Installe **[ShogoFRESH](https://github.com/KyodanCFG/ShogoFRESH)**. Il apporte dgVoodoo2, dinputto8, le widescreen, la musique, etc. Sans lui, il faut au minimum dgVoodoo2 et dinputto8 à la main.
-3. Télécharge **[Ultimate ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases)**, version Win32 (`winmm-Win32.zip`). Copie le `winmm.dll` qu'il contient dans le dossier du jeu, à côté de `Client.exe`. Si ton archive contient un autre nom (`dinput8.dll`…), renomme-le en `winmm.dll`.
+2. Installe **dgVoodoo2** et **dinputto8**, ou bien **[ShogoFRESH](https://github.com/KyodanCFG/ShogoFRESH/releases)**, qui s'en charge.
+3. Télécharge **[Ultimate ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases)** en version Win32. Copie sa DLL dans le dossier du jeu, à côté de `Client.exe`, sous le nom `winmm.dll`.
 4. Copie `ShogoFPS.asi` et `ShogoFPS.ini` (dossier `dist/`) dans le dossier du jeu.
-5. Lance le jeu comme d'habitude. Un journal `ShogoFPS.log` est créé :
+5. Lance le jeu. Un journal `ShogoFPS.log` est créé :
    - à côté de la DLL en temps normal ;
-   - dans `%LOCALAPPDATA%\ShogoFPS\` si le jeu est installé sous `Program Files`, où Windows bloque l'écriture.
+   - dans `%LOCALAPPDATA%\ShogoFPS\` si le jeu est sous `Program Files`, où Windows bloque l'écriture ;
+   - dans le dossier de ton choix si tu règles `LogDir` dans `ShogoFPS.ini`.
 
    La première ligne du journal donne son chemin exact.
 
@@ -53,8 +81,10 @@ Pour désinstaller, supprime `ShogoFPS.asi`, `ShogoFPS.ini` et `ShogoFPS.log`. S
 
 ### Réglages conseillés
 
+L'installeur automatique fait déjà le nécessaire. Ces réglages servent à l'installation manuelle, ou pour aller plus loin.
+
 **Écran 144 Hz G-Sync / FreeSync**
-- **Lanceur ShogoFRESH** : décoche **Frame rate cap**. Il est coché à 120 par défaut et réécrit `MaxFPS` à chaque lancement, donc ne modifie pas `MaxFPS` à la main.
+- **Lanceur ShogoFRESH** (si tu l'utilises) : décoche **Frame rate cap**. Il est coché à 120 par défaut et réécrit `MaxFPS` à chaque lancement, donc ne modifie pas `MaxFPS` à la main.
 - **Panneau NVIDIA** → Gérer les paramètres 3D → Paramètres de programme → `Client.exe` :
   - Fréquence d'images maximale : **141** ;
   - Synchronisation verticale : **Activée** ;
@@ -111,7 +141,8 @@ Depuis Linux (Debian/Ubuntu) :
 sudo dpkg --add-architecture i386 && sudo apt update
 sudo apt install gcc-mingw-w64-i686 wine wine32:i386 python3
 make            # produit dist/ShogoFPS.asi
-make test       # 21 tests sous Wine, avec un faux Client.exe qui imite la mécanique du moteur
+make test       # 22 tests sous Wine, avec un faux Client.exe qui imite la mécanique du moteur
+PWSH=pwsh installer/tests/test_installer.sh   # 34 tests de l'installeur (PowerShell 7, faux dossier de jeu)
 ```
 
 ## Mentions
