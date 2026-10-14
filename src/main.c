@@ -22,6 +22,7 @@ static void load_config(HMODULE self)
     g_cfg.log_enabled = 1;
     g_cfg.stats_interval = 30;
     g_cfg.valve_ms = 100;
+    g_cfg.no_player_crits = 1;
     g_cfg.log_dir[0] = 0;
     if (!slash)
         return;
@@ -38,6 +39,7 @@ static void load_config(HMODULE self)
     GETI("Log", log_enabled);
     GETI("StatsInterval", stats_interval);
     GETI("ValveMs", valve_ms);
+    GETI("NoPlayerCrits", no_player_crits);
 #undef GETI
     GetPrivateProfileStringA("ShogoFPS", "LogDir", "", g_cfg.log_dir, sizeof g_cfg.log_dir, path);
     if (g_cfg.stats_interval < 5)
@@ -62,7 +64,7 @@ static void start(HMODULE self)
 {
     pe_t pe;
     char exe[MAX_PATH] = "";
-    int tick = 0, mouse = 0;
+    int tick = 0, mouse = 0, crit = 0;
 
     load_config(self);
     log_open(self);
@@ -70,9 +72,9 @@ static void start(HMODULE self)
     GetModuleFileNameA(NULL, exe, MAX_PATH);
     log_printf("ShogoFPS " SHOGOFPS_VERSION " in %s", exe);
     log_printf("config: ServerTickFix=%d MouseFix=%d TimerResolution=%d MinTickMs=%d MouseLagMs=%d "
-               "DiagnoseOnly=%d Strict=%d StatsInterval=%d",
+               "NoPlayerCrits=%d DiagnoseOnly=%d Strict=%d StatsInterval=%d",
                g_cfg.server_tick_fix, g_cfg.mouse_fix, g_cfg.timer_resolution, g_cfg.min_tick_ms,
-               g_cfg.mouse_lag_ms, g_cfg.diagnose_only, g_cfg.strict, g_cfg.stats_interval);
+               g_cfg.mouse_lag_ms, g_cfg.no_player_crits, g_cfg.diagnose_only, g_cfg.strict, g_cfg.stats_interval);
 
     if (!pe_load(&pe, GetModuleHandleA(NULL))) {
         log_printf("cannot read Client.exe headers, nothing applied");
@@ -86,16 +88,18 @@ static void start(HMODULE self)
         tick = servertick_install(&pe);
     if (g_cfg.mouse_fix)
         mouse = mousefix_install(&pe);
+    if (g_cfg.no_player_crits)
+        crit = nocrit_install(&pe);
 
-    if (tick || mouse) {
+    if (tick || mouse || crit) {
         HMODULE pinned;
         /* Hooks point into this module: it must never be unloaded. */
         GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
                            (LPCSTR)(uintptr_t)start, &pinned);
         g_active = 1;
     }
-    log_printf("ready: server tick fix %s, mouse fix %s",
-               tick ? "ON" : "off", mouse ? "ON" : "off");
+    log_printf("ready: server tick fix %s, mouse fix %s, no player crits %s",
+               tick ? "ON" : "off", mouse ? "ON" : "off", crit ? "ON" : "off");
 }
 
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
@@ -111,6 +115,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
             if (reserved == NULL) {
                 servertick_uninstall();
                 mousefix_uninstall();
+                nocrit_uninstall();
                 timing_shutdown();
             }
             log_printf("shutdown");

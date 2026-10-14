@@ -8,7 +8,7 @@
 #include <windows.h>
 #include <stdint.h>
 
-#define SHOGOFPS_VERSION "0.2.0"
+#define SHOGOFPS_VERSION "0.3.0"
 
 /* Entry points called from game code: honour the MSVC caller's 4-byte stack. */
 #define GAME_ENTRY __attribute__((force_align_arg_pointer))
@@ -25,6 +25,7 @@ typedef struct {
     char log_dir[MAX_PATH]; /* empty = next to the DLL */
     int stats_interval;   /* seconds between stats lines */
     int valve_ms;         /* always let the server update after this much real time */
+    int no_player_crits;  /* no critical hits on the player */
 } config_t;
 
 extern config_t g_cfg;
@@ -57,6 +58,8 @@ typedef struct {
 int pe_load(pe_t *pe, HMODULE mod);
 int pe_in_exec(const pe_t *pe, const uint8_t *p, uint32_t len);
 uint64_t pe_code_hash(const pe_t *pe);
+/* Import slot of dll!func; without names, the slot holding expected (0 = no fallback). */
+DWORD *pe_find_import(const pe_t *pe, const char *dll, const char *func, DWORD expected);
 
 /* timing.c */
 typedef DWORD (WINAPI *dword_fn)(void);
@@ -83,5 +86,9 @@ void stats_maybe_report(int force);
 int mousefix_install(const pe_t *pe);
 void mousefix_uninstall(void);
 void mousefix_stats(char *buf, int len, double window_s);
+
+/* nocrit.c */
+int nocrit_install(const pe_t *exe);
+void nocrit_uninstall(void);
 
 #endif

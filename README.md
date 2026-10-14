@@ -11,6 +11,7 @@ ShogoFPS is an `.asi` plugin loaded by Ultimate ASI Loader. It works **in memory
 |---|---|---|
 | Above ~100 fps the world speeds up: AI, projectiles, doors, cutscenes. Voice lines get cut off. With a 1 ms timer that is x1.44 at 144 fps and x2.4 at 240 fps. With Windows' default 15.6 ms timer it starts around 64 fps and reaches ~x1.8 at 144 fps. | The engine advances the local server once per frame, by at least 10 ms each time. | The server is only updated once 10 ms have elapsed, so the world runs at real speed. |
 | Coarse timer. | The engine never asks Windows for a 1 ms timer. | `timeBeginPeriod(1)` for the game process. |
+| Enemies land critical hits on the player: 5% of their hits do 4x damage. | The game rolls critical hits on every character, the player included. | Once the game code (`object.lto`) loads, the check inside that roll answers "not a character" when the victim is the player. Enemies still take critical hits. `NoPlayerCrits=0` brings the original back. |
 | Mouse aim stutters above ~64 fps. | The DirectInput loop times input with `GetTickCount`, which moves in 15.6 ms steps. | That read goes through a 1 ms clock kept slightly behind Windows' clock, which is what keeps the mouse from ever freezing. |
 
 ### Side effect on enemy smoothness
@@ -139,6 +140,7 @@ The game's own limiter (`MaxFPS`, which ShogoFRESH's cap also sets) waits in who
 | `game speed x1.000` | The world runs at real speed. In diagnose mode at ~141 fps, expect ~`x1.4` if the `timer:` line shows a 1 ms step, ~`x1.8` if it shows 15 or 16 ms. |
 | `unpatched engine would run x1.44 (timer step 1 ms)` | The speed the original game would have at this frame rate, with the timer shown. |
 | `skipped`, `valve`, `frozen-clock`, `inactive` | Updates skipped (normal above ~100 fps), updates forced after 100 ms without one, updates paced while the window is in the background with `alwaysfocused 1`, and updates passed through unchanged while the window is inactive. |
+| `crit: critical hits on the player are off` | The critical hit change is in place. Each cancelled critical hit then logs `crit: critical hit on the player cancelled`. If you read `not applied`, the line says why and the game is unchanged. |
 | `mouse: ... 0% of reads with no time progress` | Smooth mouse. Without the fix, this goes over 50% at 144 fps. |
 
 ## Safety
@@ -162,7 +164,7 @@ On Linux (Debian/Ubuntu):
 sudo dpkg --add-architecture i386 && sudo apt update
 sudo apt install gcc-mingw-w64-i686 wine wine32:i386 python3 libarchive-tools
 make            # builds dist/ShogoFPS.asi
-make test       # 22 Wine tests, against a fake Client.exe that mimics the engine's mechanics
+make test       # 26 Wine tests, against a fake Client.exe that mimics the engine's mechanics
 PWSH=pwsh installer/tests/test_installer.sh   # 57 installer tests (PowerShell 7, fake game folders, real downloads)
 ```
 

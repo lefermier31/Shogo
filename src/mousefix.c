@@ -31,7 +31,7 @@ static int g_have_last;
 static unsigned g_calls, g_still, g_guard, g_catchup;
 static DWORD g_lag_min = 0xFFFFFFFFu, g_lag_max;
 
-static DWORD *find_import(const pe_t *pe, const char *dll, const char *func, DWORD expected)
+DWORD *pe_find_import(const pe_t *pe, const char *dll, const char *func, DWORD expected)
 {
     IMAGE_DATA_DIRECTORY *dd = &pe->nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
     IMAGE_IMPORT_DESCRIPTOR *d;
@@ -180,7 +180,7 @@ int mousefix_install(const pe_t *pe)
         log_printf("mouse: GetTickCount not resolved, not applied");
         return 0;
     }
-    g_slot = find_import(pe, "kernel32.dll", "GetTickCount", (DWORD)(uintptr_t)real_GetTickCount);
+    g_slot = pe_find_import(pe, "kernel32.dll", "GetTickCount", (DWORD)(uintptr_t)real_GetTickCount);
     if (!g_slot) {
         log_printf("mouse: Client.exe does not import GetTickCount, not applied");
         return 0;

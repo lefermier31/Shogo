@@ -58,6 +58,9 @@ build_fake badlayout -DBAD_LAYOUT
 build_fake nofocus -DNO_FOCUS_ANCHOR
 build_fake twocallers -DTWO_CALLERS
 cp "$WORK/std/client.exe" "$WORK/std/other.exe"
+$CC -O2 -shared "$HERE/fake_object.c" -o "$WORK/std/object.lto" || exit 1
+build_fake notwin
+$CC -O2 -shared -DNO_TWIN "$HERE/fake_object.c" -o "$WORK/notwin/object.lto" || exit 1
 
 SPEED_OK='0.98 <= r["ratio"] <= 1.03 and r["errors"] == 0'
 FAST='r["ratio"] > 2.2'
@@ -134,6 +137,16 @@ rm -rf "$WORK/logs on D"
 
 run other_process std/other.exe - -- --frames 600 --frame-ms 4
 check other_process "$FAST and log == ''"
+
+# No critical hits on the player: patched once the game code loads, enemies keep theirs.
+run crit std/client.exe - -- --crit
+check crit "r['crit_player'] == 10 and r['crit_ai'] == 40 and r['miss_player'] == 10 and r['miss_ai'] == 10 and 'critical hits on the player are off' in log"
+run crit_off std/client.exe "NoPlayerCrits=0" -- --crit
+check crit_off "r['crit_player'] == 40 and r['crit_ai'] == 40"
+run crit_diag std/client.exe "DiagnoseOnly=1" -- --crit
+check crit_diag "r['crit_player'] == 40 and 'DIAGNOSE ONLY, critical hits' in log"
+run crit_notwin notwin/client.exe - -- --crit
+check crit_notwin "r['crit_player'] == 40 and r['crit_ai'] == 40 and 'IsPlayer found 0 times' in log"
 
 echo "$pass passed, $fail failed  (work dir: $WORK)"
 [ "$fail" -eq 0 ]

@@ -207,7 +207,7 @@ static double qpc_now(void)
 int main(int argc, char **argv)
 {
     int frames = 2000, load = 1, i, errors = 0, jitter = 0, freeze = 0, pc24 = 0;
-    int inactive_from = -1, inactive_to = -1;
+    int inactive_from = -1, inactive_to = -1, crit = 0;
     unsigned inactive_frames = 0, inactive_runs = 0, short_frames = 0;
     double frame_ms = 4.0, target, qdays = 0, span_q0 = 0, span_q1 = 0;
     float t, t_first = 0, t_last = 0, t_prev = 0, engine_t = 0, span_g0 = 0, span_g1 = 0;
@@ -222,6 +222,8 @@ int main(int argc, char **argv)
             frame_ms = atof(argv[++i]);
         else if (!strcmp(argv[i], "--no-load"))
             load = 0;
+        else if (!strcmp(argv[i], "--crit"))
+            crit = 1;
         else if (!strcmp(argv[i], "--jitter"))
             jitter = 1;
         else if (!strcmp(argv[i], "--freeze"))
@@ -247,6 +249,22 @@ int main(int argc, char **argv)
         _controlfp(_PC_24, _MCW_PC); /* as the engine and Direct3D do */
     if (load && !LoadLibraryA("ShogoFPS.asi"))
         printf("LOADFAIL %lu\n", GetLastError());
+
+    if (crit) {
+        /* The game code loads after the plugin, through the import table, as object.lto does. */
+        typedef void (*crit_fn)(float, float *, float *);
+        HMODULE obj = LoadLibraryA("object.lto");
+        crit_fn test = obj ? (crit_fn)GetProcAddress(obj, "crit_test") : NULL;
+        float hp, ha, mp, ma;
+        if (!test) {
+            printf("CRITFAIL %lu\n", GetLastError());
+            return 1;
+        }
+        test(0.01f, &hp, &ha);
+        test(0.5f, &mp, &ma);
+        printf("RESULT crit_player=%.1f crit_ai=%.1f miss_player=%.1f miss_ai=%.1f\n", hp, ha, mp, ma);
+        return 0;
+    }
 
     sm = calloc(1, sizeof *sm);
     prev_tgt = timeGetTime();
