@@ -64,7 +64,9 @@ $CC -O2 -shared -DNO_TWIN "$HERE/fake_object.c" -o "$WORK/notwin/object.lto" || 
 
 SPEED_OK='0.98 <= r["ratio"] <= 1.03 and r["errors"] == 0'
 FAST='r["ratio"] > 2.2'
-MOUSE_OK='r["ahead"] == 0 and r["backwards"] == 0 and r["still"] < 0.1 * r["reads"] and r["maxlag"] <= 26'
+# maxlag: 20 ms by design; Wine scheduling stalls add up to ~11 ms on a busy host. The drift bug
+# this guards against reached 55 ms.
+MOUSE_OK='r["ahead"] == 0 and r["backwards"] == 0 and r["still"] < 0.1 * r["reads"] and r["maxlag"] <= 34'
 
 run baseline std/client.exe - -- --no-load --frames 1500 --frame-ms 4
 check baseline "$FAST and r['errors'] == 0 and r['still'] > 0.5 * r['reads']"
@@ -147,6 +149,12 @@ run crit_diag std/client.exe "DiagnoseOnly=1" -- --crit
 check crit_diag "r['crit_player'] == 40 and 'DIAGNOSE ONLY, critical hits' in log"
 run crit_notwin notwin/client.exe - -- --crit
 check crit_notwin "r['crit_player'] == 40 and r['crit_ai'] == 40 and 'IsPlayer found 0 times' in log"
+
+# Endless cutscenes: a camera already playing ignores a repeated ON, nothing else changes.
+run cutscene std/client.exe - -- --cutscene
+check cutscene "r['live_on_delivered'] == 0 and r['idle_on_delivered'] == 1 and r['door_on_delivered'] == 1 and r['live_off_delivered'] == 1 and 'repeated ON ignored' in log"
+run cutscene_off std/client.exe "CutsceneFix=0" -- --cutscene
+check cutscene_off "r['live_on_delivered'] == 1"
 
 echo "$pass passed, $fail failed  (work dir: $WORK)"
 [ "$fail" -eq 0 ]

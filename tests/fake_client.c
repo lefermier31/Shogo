@@ -11,6 +11,7 @@
  * Build variants: -DDECOY_CLAMP, -DBAD_LAYOUT, -DNO_FOCUS_ANCHOR, -DTWO_CALLERS.
  */
 #include <windows.h>
+#include <stdint.h>
 #include <float.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -204,10 +205,50 @@ static double qpc_now(void)
     return (double)c.QuadPart / (double)f.QuadPart;
 }
 
+/* --cutscene: a stand-in for the engine's server interface (table + function members), as handed to
+   the game code's ObjectDLLSetup. HSTRINGs are plain C strings here. */
+typedef struct { const char *cls; DWORD flags; } fake_ent;
+static char g_delivered[64];
+static void *fs_vt[71];
+static struct { void **vt; uint8_t members[440]; } fs_server;
+static void *__attribute__((thiscall)) fs_start(void *self, void *sender, void *hobj, DWORD id)
+{ (void)self; (void)sender; (void)id; return hobj; }
+static DWORD __attribute__((thiscall)) fs_write(void *self, void *msg, void *hstr)
+{ (void)self; (void)msg; lstrcpynA(g_delivered, (const char *)hstr, sizeof g_delivered); return 0; }
+static DWORD __attribute__((thiscall)) fs_end(void *self, void *msg) { (void)self; (void)msg; return 0; }
+static void *__cdecl fs_get_class(const char *n) { return (void *)(uintptr_t)(strcmp(n, "Camera") ? 2 : 1); }
+static void *__cdecl fs_obj_class(void *h) { return (void *)(uintptr_t)(strcmp(((fake_ent *)h)->cls, "Camera") ? 3 : 1); }
+static int __cdecl fs_kind(void *a, void *b) { return a == b; }
+static void *__cdecl fs_create(const char *s) { return strdup(s); }
+static void __cdecl fs_free(void *h) { free(h); }
+static char *__cdecl fs_data(void *h) { return (char *)h; }
+static DWORD __cdecl fs_flags(void *h) { return ((fake_ent *)h)->flags; }
+#define FS_MEMBER(off, fn) (*(void **)((uint8_t *)&fs_server + (off)) = (void *)(fn))
+typedef void *(__attribute__((thiscall)) *fs_start_t)(void *, void *, void *, DWORD);
+typedef DWORD(__attribute__((thiscall)) *fs_write_t)(void *, void *, void *);
+typedef DWORD(__attribute__((thiscall)) *fs_end_t)(void *, void *);
+/* Through the import table at call time, as the engine does (GCC may otherwise reuse an address
+   read before the plugin hooked the import). */
+__attribute__((noinline)) static FARPROC import_GetProcAddress(HMODULE h, const char *name)
+{
+    return GetProcAddress(h, name);
+}
+
+static const char *fs_send(fake_ent *to, const char *text)
+{
+    void **vt = fs_server.vt;
+    void *m = ((fs_start_t)vt[39])(&fs_server, NULL, to, 1000);
+    char buf[16];
+    lstrcpynA(buf, text, sizeof buf);
+    ((fs_write_t)vt[10])(&fs_server, m, buf);
+    ((fs_end_t)vt[43])(&fs_server, m);
+    return g_delivered;
+}
+
 int main(int argc, char **argv)
 {
     int frames = 2000, load = 1, i, errors = 0, jitter = 0, freeze = 0, pc24 = 0;
-    int inactive_from = -1, inactive_to = -1, crit = 0;
+    int inactive_from = -1, inactive_to = -1, crit = 0, cutscene = 0;
     unsigned inactive_frames = 0, inactive_runs = 0, short_frames = 0;
     double frame_ms = 4.0, target, qdays = 0, span_q0 = 0, span_q1 = 0;
     float t, t_first = 0, t_last = 0, t_prev = 0, engine_t = 0, span_g0 = 0, span_g1 = 0;
@@ -224,6 +265,8 @@ int main(int argc, char **argv)
             load = 0;
         else if (!strcmp(argv[i], "--crit"))
             crit = 1;
+        else if (!strcmp(argv[i], "--cutscene"))
+            cutscene = 1;
         else if (!strcmp(argv[i], "--jitter"))
             jitter = 1;
         else if (!strcmp(argv[i], "--freeze"))
@@ -249,6 +292,33 @@ int main(int argc, char **argv)
         _controlfp(_PC_24, _MCW_PC); /* as the engine and Direct3D do */
     if (load && !LoadLibraryA("ShogoFPS.asi"))
         printf("LOADFAIL %lu\n", GetLastError());
+
+    if (cutscene) {
+        typedef void *(__cdecl *setup_t)(int *, void *, int *);
+        fake_ent cam = {"Camera", 0x20}, door = {"Door", 0x20};
+        HMODULE obj = LoadLibraryA("object.lto");
+        setup_t setup = obj ? (setup_t)import_GetProcAddress(obj, "ObjectDLLSetup") : NULL;
+        int n, v, live_on, idle_on, door_on, live_off;
+        if (!setup) {
+            printf("CUTFAIL %lu\n", GetLastError());
+            return 1;
+        }
+        fs_server.vt = fs_vt;
+        fs_vt[39] = (void *)fs_start;
+        fs_vt[10] = (void *)fs_write;
+        fs_vt[43] = (void *)fs_end;
+        FS_MEMBER(8, fs_get_class); FS_MEMBER(16, fs_obj_class); FS_MEMBER(20, fs_kind);
+        FS_MEMBER(116, fs_create); FS_MEMBER(120, fs_free); FS_MEMBER(132, fs_data); FS_MEMBER(432, fs_flags);
+        setup(&n, &fs_server, &v);
+        live_on = strcmp(fs_send(&cam, "ON"), "ON") == 0;
+        live_off = strcmp(fs_send(&cam, "OFF"), "OFF") == 0;
+        door_on = strcmp(fs_send(&door, "ON"), "ON") == 0;
+        cam.flags = 0;
+        idle_on = strcmp(fs_send(&cam, "on"), "on") == 0;
+        printf("RESULT live_on_delivered=%d idle_on_delivered=%d door_on_delivered=%d live_off_delivered=%d\n",
+               live_on, idle_on, door_on, live_off);
+        return 0;
+    }
 
     if (crit) {
         /* The game code loads after the plugin, through the import table, as object.lto does. */

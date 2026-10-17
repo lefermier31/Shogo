@@ -8,7 +8,7 @@
 #include <windows.h>
 #include <stdint.h>
 
-#define SHOGOFPS_VERSION "0.3.0"
+#define SHOGOFPS_VERSION "0.4.0"
 
 /* Entry points called from game code: honour the MSVC caller's 4-byte stack. */
 #define GAME_ENTRY __attribute__((force_align_arg_pointer))
@@ -26,6 +26,7 @@ typedef struct {
     int stats_interval;   /* seconds between stats lines */
     int valve_ms;         /* always let the server update after this much real time */
     int no_player_crits;  /* no critical hits on the player */
+    int cutscene_fix;     /* a live camera ignores a repeated ON */
 } config_t;
 
 extern config_t g_cfg;
@@ -90,5 +91,9 @@ void mousefix_stats(char *buf, int len, double window_s);
 /* nocrit.c */
 int nocrit_install(const pe_t *exe);
 void nocrit_uninstall(void);
+
+/* camguard.c */
+int camguard_install(const pe_t *exe);
+void camguard_uninstall(void);
 
 #endif
