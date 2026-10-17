@@ -8,7 +8,7 @@
 #include <windows.h>
 #include <stdint.h>
 
-#define SHOGOFPS_VERSION "0.4.0"
+#define SHOGOFPS_VERSION "0.4.1"
 
 /* Entry points called from game code: honour the MSVC caller's 4-byte stack. */
 #define GAME_ENTRY __attribute__((force_align_arg_pointer))

@@ -405,6 +405,18 @@ static void self_check(const uint8_t *o, float now_arg)
     }
 }
 
+/* Minimised or behind another window, the engine stops presenting frames, so no frame cap applies
+   and it spins at ~11000 fps. A short sleep per frame there keeps it near 90. */
+static void background_nap(void)
+{
+    HWND fg = GetForegroundWindow();
+    DWORD pid = 0;
+    if (fg)
+        GetWindowThreadProcessId(fg, &pid);
+    if (pid != GetCurrentProcessId())
+        Sleep(10);
+}
+
 static unsigned int do_pass(uint8_t *o, unsigned int flags, float now)
 {
     int active = !(flags & 1) && !special_state(o);
@@ -421,6 +433,8 @@ static unsigned int do_pass(uint8_t *o, unsigned int flags, float now)
     if (!active) {
         W.inactive++;
         g_prev_active_valid = 0;
+        if (!g_cfg.diagnose_only)
+            background_nap();
         return ret;
     }
     self_check(o, now);

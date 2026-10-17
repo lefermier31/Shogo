@@ -27,6 +27,8 @@ static DWORD *g_ll_slot;
 static DWORD g_ll_orig;
 static int g_installed;
 static volatile LONG g_blocked;
+static HMODULE g_patched_mod;
+static const uint8_t *g_patched_site;
 
 static int __cdecl GAME_ENTRY crit_victim_filter(void *hobject)
 {
@@ -182,6 +184,9 @@ static void patch_module(HMODULE mod, const char *name)
     DWORD old;
     int32_t rel;
 
+    /* The engine loads the game code twice; the second load returns the module already patched. */
+    if (mod == g_patched_mod && call_target(g_patched_site) == (const uint8_t *)crit_victim_filter)
+        return;
     if (!pe_load(&pe, mod)) {
         log_printf("crit: cannot read %s, not applied", name);
         return;
@@ -285,6 +290,8 @@ static void patch_module(HMODULE mod, const char *name)
     memcpy((void *)(site + 1), &rel, 4);
     VirtualProtect((void *)(site + 1), 4, old, &old);
     FlushInstructionCache(GetCurrentProcess(), site, 5);
+    g_patched_mod = mod;
+    g_patched_site = site;
     log_printf("crit: critical hits on the player are off");
 }
 
